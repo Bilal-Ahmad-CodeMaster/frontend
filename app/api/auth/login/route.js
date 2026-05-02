@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import clientPromise from "@/lib/db";
+import clientPromise from "../../../lib/db.js";
 import bcrypt from "bcryptjs";
 
 export async function POST(req) {
