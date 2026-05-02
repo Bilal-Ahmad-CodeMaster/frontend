@@ -24,3 +24,34 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Heartbeat animations */
+@layer utilities {
+  .animate-heartbeat {
+    animation: heartbeatMove 4s linear infinite;
+    stroke-dasharray: 2000;
+  }
+  
+  .animate-heartbeat-dot {
+    animation: heartbeatPulse 0.8s ease-in-out infinite;
+  }
+  
+  .animate-slide-heartbeat {
+    animation: slideHeartbeat 8s linear infinite;
+  }
+}
+
+@keyframes heartbeatMove {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -2000; }
+}
+
+@keyframes heartbeatPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+@keyframes slideHeartbeat {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
