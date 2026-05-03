@@ -47,20 +47,33 @@ export default function DispatchPage() {
       setCoords('Location not available')
     }
   }, [router])
-
-  const sendAlert = async () => {
-    setStatus('sending')
-
-    // Simulate API call (replace with real API later)
-    await new Promise(resolve => setTimeout(resolve, 1800))
-    
-    setStatus('sent')
-    setResponders({
-      rescue: 'Notified',
-      contact: 'WhatsApp ✓',
-      vol: '2 nearby'
-    })
+// Load user blood group from localStorage
+useEffect(() => {
+  const userStr = localStorage.getItem('madad_user')
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr)
+      if (user.medicalInfo?.bloodGroup) {
+        localStorage.setItem('madad_blood_group', user.medicalInfo.bloodGroup)
+      }
+    } catch (e) {
+      console.error('Failed to parse user data')
+    }
   }
+}, [])
+const sendAlert = async () => {
+  setStatus('sending')
+  
+  // Simulate API call (no real API needed)
+  await new Promise(resolve => setTimeout(resolve, 1800))
+  
+  setStatus('sent')
+  setResponders({
+    rescue: 'Notified',
+    contact: 'WhatsApp ✓',
+    vol: '2 nearby'
+  })
+}
 
   const severityColor: Record<string, string> = {
     critical: 'text-red-400',

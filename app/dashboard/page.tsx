@@ -126,38 +126,85 @@ export default function DashboardPage() {
   }, [triage])
 
   // Setup Web Speech API
-  const setupRecognition = () => {
-    const SR = (window as Window & typeof globalThis).SpeechRecognition ||
-      (window as Window & typeof globalThis).webkitSpeechRecognition
-    if (!SR) {
-      alert('Use Chrome or Edge for voice recognition.')
-      return null
+const setupRecognition = () => {
+  const SR = (window as Window & typeof globalThis).SpeechRecognition ||
+    (window as Window & typeof globalThis).webkitSpeechRecognition
+  if (!SR) {
+    alert('Use Chrome or Edge for voice recognition.')
+    return null
+  }
+
+  const r = new SR()
+  r.continuous = true
+  r.interimResults = true
+  r.lang = 'en-US'
+
+  r.onresult = async (e: SpeechRecognitionEvent) => {
+    let interim = '', final = ''
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript
+      e.results[i].isFinal ? (final += t) : (interim += t)
     }
-
-    const r = new SR()
-    r.continuous = true
-    r.interimResults = true
-    r.lang = 'en-US'
-
-    r.onresult = (e: SpeechRecognitionEvent) => {
-      let interim = '', final = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript
-        e.results[i].isFinal ? (final += t) : (interim += t)
-      }
-      const full = (final || interim).trim()
-      setTranscript(full)
-      if (final.trim()) {
+    const full = (final || interim).trim()
+    setTranscript(full)
+    
+    if (final.trim()) {
+      try {
+        // Get user location
+        let location = { lat: null, lng: null }
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              location = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+            },
+            () => console.log('Location permission denied')
+          )
+        }
+        
+        // CALL REAL API
+        const response = await fetch('/api/emergency', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            transcript: final,
+            location: location,
+            userId: localStorage.getItem('madad_user_id'),
+          }),
+        })
+        
+        const data = await response.json()
+        
+        if (response.ok) {
+          // Use AI response from API
+          const severity = data.severity || 'minor'
+          const type = data.type || 'General Emergency'
+          const steps = data.guidance ? data.guidance.split('\n') : triageText(final).steps
+          
+          setTriage({ severity, type, steps })
+          speakText(steps[0])
+        } else {
+          // Fallback to local triage
+          const result = triageText(final)
+          setTriage(result)
+          speakText(result.steps[0])
+        }
+        
+      } catch (error) {
+        console.error('API Error:', error)
+        // Fallback to local triage
         const result = triageText(final)
         setTriage(result)
         speakText(result.steps[0])
       }
     }
-
-    r.onerror = () => stopListening()
-    r.onend = () => { if (listening) r.start() }
-    return r
   }
+
+  r.onerror = () => stopListening()
+  r.onend = () => { if (listening) r.start() }
+  return r
+}
 
   const startListening = () => {
     const r = setupRecognition()
@@ -175,13 +222,43 @@ export default function DashboardPage() {
 
   const toggleMic = () => listening ? stopListening() : startListening()
 
-  const triggerScenario = (key: string) => {
-    stopListening()
-    setTranscript('I need help with ' + key)
+ const triggerScenario = async (key: string) => {
+  stopListening()
+  setTranscript('I need help with ' + key)
+  
+  try {
+    const response = await fetch('/api/emergency', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        transcript: key,
+        location: { lat: null, lng: null },
+        userId: localStorage.getItem('madad_user_id'),
+      }),
+    })
+    
+    const data = await response.json()
+    
+    if (response.ok) {
+      const severity = data.severity || 'minor'
+      const type = key.charAt(0).toUpperCase() + key.slice(1)
+      const steps = data.guidance ? data.guidance.split('\n') : triageText(key).steps
+      
+      setTriage({ severity, type, steps })
+      speakText(steps[0])
+    } else {
+      const result = triageText(key)
+      setTriage(result)
+      speakText(result.steps[0])
+    }
+  } catch (error) {
     const result = triageText(key)
     setTriage(result)
     speakText(result.steps[0])
   }
+}
 
   const speakText = (text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return

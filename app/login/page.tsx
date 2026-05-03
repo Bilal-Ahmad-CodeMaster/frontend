@@ -83,35 +83,91 @@ export default function AuthPage() {
     const updL = (k: keyof LoginForm, v: string) => { setLog(p => ({ ...p, [k]: v })); setLogErr(p => ({ ...p, [k]: '' })) }
     const updR = (k: keyof RegisterForm, v: string | boolean) => { setReg(p => ({ ...p, [k]: v })); setRegErr(p => ({ ...p, [k]: '' })) }
 
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault(); setError(''); setSuccess('')
-        if (!isEmail(log.email)) { setLogErr(p => ({ ...p, email: 'Enter a valid email' })); return }
-        if (!log.password.trim()) { setLogErr(p => ({ ...p, password: 'Password is required' })); return }
-        setLoading(true)
-        try {
-            await new Promise(r => setTimeout(r, 1200))
-            setSuccess('Welcome back! Redirecting…')
-            setTimeout(() => router.push('/dashboard'), 1500)
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Login failed. Try again.')
-        } finally { setLoading(false) }
-    }
-
-    const handleRegister = async (e: React.FormEvent) => {
-        e.preventDefault(); setError(''); setSuccess('')
-        if (!reg.agreed) { setError('Please agree to the Terms of Service to continue.'); return }
-        const errors = validateRegister(reg)
-        if (Object.keys(errors).length) { setRegErr(errors); return }
-        setLoading(true)
-        try {
-            await new Promise(r => setTimeout(r, 1500))
-            setSuccess('Account created! Welcome to Madad.')
-            setTimeout(() => router.push('/dashboard'), 1500)
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Registration failed. Try again.')
-        } finally { setLoading(false) }
-    }
-
+   const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(''); setSuccess('')
+    if (!isEmail(log.email)) { setLogErr(p => ({ ...p, email: 'Enter a valid email' })); return }
+    if (!log.password.trim()) { setLogErr(p => ({ ...p, password: 'Password is required' })); return }
+    setLoading(true)
+    try {
+        // REAL API CALL
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                email: log.email, 
+                password: log.password 
+            }),
+        })
+        
+        const data = await response.json()
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Login failed')
+        }
+        
+        // Store user data
+        localStorage.setItem('madad_user', JSON.stringify(data.user))
+        localStorage.setItem('madad_user_id', data.user._id)
+        
+        setSuccess('Welcome back! Redirecting…')
+        setTimeout(() => router.push('/dashboard'), 1500)
+        
+    } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Login failed. Try again.')
+    } finally { setLoading(false) }
+}
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(''); setSuccess('')
+    if (!reg.agreed) { setError('Please agree to the Terms of Service to continue.'); return }
+    const errors = validateRegister(reg)
+    if (Object.keys(errors).length) { setRegErr(errors); return }
+    setLoading(true)
+    try {
+        // REAL API CALL
+        const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                firstName: reg.firstName,
+                lastName: reg.lastName,
+                email: reg.email,
+                phone: `+92${reg.phone}`,
+                bloodGroup: reg.bloodGroup,
+                emergencyContact: {
+                    name: reg.ecName,
+                    phone: reg.ecPhone,
+                },
+                password: reg.password,
+            }),
+        })
+        
+        const data = await response.json()
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Registration failed')
+        }
+        
+        setSuccess('Account created! Redirecting to login...')
+        
+        // Clear form and switch to login tab after 2 seconds
+        setTimeout(() => {
+            switchTab('login')
+            setReg({
+                firstName: '', lastName: '', bloodGroup: '', email: '', 
+                phone: '', ecName: '', ecPhone: '', password: '', 
+                confirmPassword: '', agreed: false
+            })
+            setSuccess('')
+        }, 2000)
+        
+    } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Registration failed. Try again.')
+    } finally { setLoading(false) }
+}
     const secLabel = (txt: string) => (
         <p className="text-[11px] font-semibold tracking-widest uppercase text-[#3D4855] border-b border-[#1E2530] pb-2 mt-1">{txt}</p>
     )
