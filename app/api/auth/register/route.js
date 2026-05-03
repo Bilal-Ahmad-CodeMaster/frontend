@@ -1,63 +1,68 @@
-export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
-import clientPromise from "../../../lib/db.js";
-import bcrypt from "bcryptjs";
+export const dynamic = 'force-dynamic'
+import { NextResponse } from 'next/server'
+// import clientPromise from '../../../lib/db.js'
+import bcrypt from 'bcryptjs'
 
 export async function POST(req) {
   try {
-    const { firstName, lastName, email, phone, bloodGroup, password } =
-      await req.json();
+    const body = await req.json()
+    console.log("📥 Received:", body)
 
-    // 1. Validation
+    const { firstName, lastName, email, phone, bloodGroup, password } = body
+
+    // Validation
     if (!email || !password || !phone) {
+      console.log("❌ Missing fields")
       return NextResponse.json(
         { error: "Missing required fields" },
-        { status: 400 },
-      );
+        { status: 400 }
+      )
     }
 
-    const client = await clientPromise;
-    const db = client.db("madad");
+    const client = await clientPromise
+    const db = client.db("madad")
 
-    // 2. Check if user already exists
+    // Check if user exists
     const existingUser = await db
       .collection("users")
-      .findOne({ email: email.toLowerCase() });
+      .findOne({ email: email.toLowerCase() })
+    
     if (existingUser) {
+      console.log("❌ User already exists")
       return NextResponse.json(
         { error: "Email already registered" },
-        { status: 409 },
-      );
+        { status: 409 }
+      )
     }
 
-    // 3. Hash Password for security
-    const hashedPassword = await bcrypt.hash(password, 12);
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12)
 
-    // 4. Create User Profile based on UI images
+    // Create user
     const newUser = {
       firstName,
       lastName,
       email: email.toLowerCase(),
-      phone, // Format: +92XXXXXXXXXX
-      medicalInfo: {
-        bloodGroup,
-      },
+      phone,
+      medicalInfo: { bloodGroup: bloodGroup || 'Unknown' },
       password: hashedPassword,
       createdAt: new Date(),
       systemStatus: "ACTIVE",
-    };
+    }
 
-    await db.collection("users").insertOne(newUser);
+    await db.collection("users").insertOne(newUser)
+    console.log("✅ User created:", email)
 
     return NextResponse.json(
       { message: "Registration successful" },
-      { status: 201 },
-    );
+      { status: 201 }
+    )
+
   } catch (error) {
-    console.error("Signup Error:", error);
+    console.error("🔥 ERROR:", error)
     return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+      { error: error.message || "Internal Server Error" },
+      { status: 500 }
+    )
   }
 }

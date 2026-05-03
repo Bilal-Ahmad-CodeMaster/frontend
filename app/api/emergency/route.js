@@ -1,158 +1,178 @@
-export const dynamic = "force-dynamic";
-import { NextResponse } from "next/server";
-import clientPromise from "../../lib/db.js";
-import { Pinecone } from "@pinecone-database/pinecone";
-import { Redis } from "@upstash/redis";
-import twilio from "twilio";
-import Groq from "groq-sdk";
+export const dynamic = 'force-dynamic'
+import { NextResponse } from 'next/server'
+import clientPromise from '../../lib/db.js'
+import { Pinecone } from '@pinecone-database/pinecone'
+import { Redis } from '@upstash/redis'
+import twilio from 'twilio'
+import Groq from 'groq-sdk'
 
-// Initialize Stateless Clients
+// ── CLIENTS ───────────────────────────────────────────────────────────────────
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
-});
+})
 
-const pc = new Pinecone({ apiKey: process.env.PINECONE_KEY });
-const index = pc.index(process.env.PINECONE_INDEX);
+const pc = new Pinecone({ apiKey: process.env.PINECONE_KEY })
+const index = pc.index(process.env.PINECONE_INDEX)
 
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN,
-);
+  process.env.TWILIO_AUTH_TOKEN
+)
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-// --- AI ORCHESTRATION ---
-
+// ── AI CALL WITH FALLBACK MODELS ──────────────────────────────────────────────
 async function callAI(prompt) {
   const models = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "llama-3.1-70b-versatile",
-  ];
-
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'llama-3.1-70b-versatile',
+  ]
   for (const model of models) {
     try {
       const res = await groq.chat.completions.create({
         model,
-        messages: [{ role: "user", content: prompt }],
+        messages: [{ role: 'user', content: prompt }],
         temperature: 0.3,
         max_tokens: 500,
-      });
-      return res;
+      })
+      return res
     } catch (err) {
-      console.error(`Model ${model} failed, trying next...`);
+      console.error(`Model ${model} failed:`, err.message)
     }
   }
-  return null;
+  return null
 }
 
-// --- AGENT HELPERS ---
-
+// ── LANGUAGE DETECTION ────────────────────────────────────────────────────────
 async function detectLanguage(text) {
-  if (!text || text.trim().length < 5) return "en";
-  const prompt = `Detect language. Reply ONLY with ISO 639-1 code (en, ur, hi, ar, etc). Text: "${text}"`;
-  const res = await callAI(prompt);
-  const lang = res?.choices[0]?.message?.content?.trim().toLowerCase() || "en";
-  return lang.match(/^[a-z]{2}/)?.[0] || "en";
+  if (!text || text.trim().length < 5) return 'en'
+  const prompt = `Detect language. Reply ONLY with ISO 639-1 code (en, ur, ar). Text: "${text}"`
+  const res = await callAI(prompt)
+  const lang = res?.choices[0]?.message?.content?.trim().toLowerCase() || 'en'
+  return lang.match(/^[a-z]{2}/)?.[0] || 'en'
 }
 
+// ── TRIAGE AGENT ──────────────────────────────────────────────────────────────
 async function handleTriage(text) {
-  const t = text.toLowerCase();
-  // Rule-based fast path
-  if (t.includes("not breathing") || t.includes("unconscious"))
-    return { severity: "critical", type: "Cardiac Arrest" };
-  if (t.includes("choking")) return { severity: "critical", type: "Choking" };
+  const t = text.toLowerCase()
+  // fast rule-based path
+  if (t.includes('not breathing') || t.includes('unconscious') || t.includes('cardiac'))
+    return { severity: 'critical', type: 'Cardiac Arrest' }
+  if (t.includes('choking'))
+    return { severity: 'critical', type: 'Choking' }
+  if (t.includes('heart') || t.includes('chest pain') || t.includes('attack'))
+    return { severity: 'critical', type: 'Heart Attack' }
+  if (t.includes('bleed') || t.includes('blood') || t.includes('wound'))
+    return { severity: 'urgent', type: 'Severe Bleeding' }
+  if (t.includes('burn'))
+    return { severity: 'urgent', type: 'Burns' }
 
-  const prompt = `Triage this emergency. Return ONLY JSON: {"severity": "critical"|"moderate", "type": "description"}. Text: "${text}"`;
-  const chat = await callAI(prompt);
-  const raw = chat?.choices[0]?.message?.content || "";
-  const match = raw.match(/\{.*\}/s);
-  return match
-    ? JSON.parse(match[0])
-    : { severity: "critical", type: "General Emergency" };
+  const prompt = `Triage this emergency. Return ONLY valid JSON: {"severity": "critical"|"urgent"|"minor", "type": "short description"}. Text: "${text}"`
+  const chat = await callAI(prompt)
+  const raw = chat?.choices[0]?.message?.content || ''
+  const match = raw.match(/\{.*\}/s)
+  try {
+    return match ? JSON.parse(match[0]) : { severity: 'critical', type: 'General Emergency' }
+  } catch {
+    return { severity: 'critical', type: 'General Emergency' }
+  }
 }
 
+// ── INSTRUCTION AGENT (RAG) ───────────────────────────────────────────────────
 async function handleRAG(transcript, langCode) {
-  const langNames = { en: "English", ur: "Urdu", hi: "Hindi", ar: "Arabic" };
-  const language = langNames[langCode] || "English";
+  const langNames = { en: 'English', ur: 'Urdu', ar: 'Arabic' }
+  const language = langNames[langCode] || 'English'
 
-  const queryResponse = await index.query({
-    vector: Array(384).fill(0.1), // Replace with actual embedding logic if available
-    topK: 3,
-    includeMetadata: true,
-  });
+  let context = ''
+  try {
+    const queryResponse = await index.query({
+      vector: Array(384).fill(0.1), // TODO: replace with real MiniLM embedding
+      topK: 3,
+      includeMetadata: true,
+    })
+    context = queryResponse.matches?.map(m => m.metadata?.text).filter(Boolean).join('\n') || ''
+  } catch (err) {
+    console.error('Pinecone error:', err.message)
+  }
 
-  const context = queryResponse.matches
-    ?.map((m) => m.metadata?.text)
-    .join("\n");
-  const prompt = `Medical assistant. Respond in ${language}. Short steps. Context: ${context}. User: ${transcript}`;
+  const prompt = `You are a medical first-aid assistant. Respond in ${language}. Give numbered steps, keep each step short and clear. ${context ? `Use this medical context: ${context}` : ''} Emergency: ${transcript}`
 
-  const chat = await callAI(prompt);
-  return chat?.choices[0]?.message?.content || "Stay calm. Help is coming.";
+  const chat = await callAI(prompt)
+  return chat?.choices[0]?.message?.content || 'Stay calm. Call 1122 immediately. Help is on the way.'
 }
 
-// --- MAIN API HANDLER ---
-
+// ── MAIN HANDLER ──────────────────────────────────────────────────────────────
 export async function POST(req) {
   try {
-    const { transcript, location, userId } = await req.json();
-    if (!transcript)
-      return NextResponse.json(
-        { error: "Missing transcript" },
-        { status: 400 },
-      );
+    const { transcript, location, userId } = await req.json()
 
-    // 1. Cache Check
-    const cached = await redis.get(transcript.toLowerCase().trim());
-    if (cached)
-      return NextResponse.json({
-        source: "cache",
-        guidance: cached,
-        severity: "critical",
-      });
+    if (!transcript) {
+      return NextResponse.json({ error: 'Missing transcript' }, { status: 400 })
+    }
 
-    // 2. Triage & Language Detection (Parallel)
+    // ── 1. CHECK HOT CACHE ────────────────────────────────────────────────────
+    const cacheKey = transcript.toLowerCase().trim()
+    try {
+      const cached = await redis.get(cacheKey)
+      if (cached) {
+        return NextResponse.json({ source: 'cache', guidance: cached, severity: 'critical' })
+      }
+    } catch (err) {
+      console.error('Redis error (non-fatal):', err.message)
+    }
+
+    // ── 2. PARALLEL: TRIAGE + LANGUAGE DETECTION ──────────────────────────────
     const [lang, triage] = await Promise.all([
       detectLanguage(transcript),
       handleTriage(transcript),
-    ]);
+    ])
 
-    // 3. Guidance Generation
-    const guidance = await handleRAG(transcript, lang);
+    // ── 3. GENERATE GUIDANCE ──────────────────────────────────────────────────
+    const guidance = await handleRAG(transcript, lang)
 
-    // 4. Background Dispatch
-    if (triage.severity === "critical") {
-      const mapLink = `https://www.google.com/maps?q=${location.lat},${location.lng}`;
+    // ── 4. DISPATCH IF CRITICAL (non-blocking) ────────────────────────────────
+    if (triage.severity === 'critical') {
+      const mapLink = location?.lat
+        ? `https://www.google.com/maps?q=${location.lat},${location.lng}`
+        : 'Location not available'
 
-      // We don't 'await' this so the user gets the response faster
+      // Fire and forget — do not await so user gets response fast
       twilioClient.messages.create({
         from: process.env.TWILIO_WHATSAPP_NUMBER,
         to: process.env.EMERGENCY_CONTACT_WHATSAPP,
-        body: `🚨 MADAD ALERT\nType: ${triage.type}\nLocation: ${mapLink}`,
-      });
+        body: `🚨 MADAD EMERGENCY ALERT\nType: ${triage.type}\nSeverity: CRITICAL\nLocation: ${mapLink}`,
+      }).catch(err => console.error('Twilio error:', err.message))
 
-      const client = await clientPromise;
-      const db = client.db("madad");
-      db.collection("active_emergencies").insertOne({
-        userId,
-        type: triage.type,
-        location,
-        createdAt: new Date(),
-      });
+      clientPromise.then(client => {
+        client.db('madad').collection('active_emergencies').insertOne({
+          userId: userId || 'anonymous',
+          type: triage.type,
+          severity: triage.severity,
+          location: location || {},
+          language: lang,
+          transcript,
+          createdAt: new Date(),
+        })
+      }).catch(err => console.error('DB log error:', err.message))
     }
 
     return NextResponse.json({
-      source: "ai",
+      source: 'ai',
       guidance,
       severity: triage.severity,
+      type: triage.type,
       language: lang,
-    });
+    })
   } catch (err) {
-    console.error("Critical Failure:", err);
+    console.error('Emergency API failure:', err)
+    // Always return something useful — never crash silently
     return NextResponse.json({
-      guidance: "Emergency detected. Call 1122.",
-      severity: "critical",
-    });
+      source: 'fallback',
+      guidance: 'Emergency detected. Call 1122 immediately. Stay calm and keep the person still.',
+      severity: 'critical',
+      type: 'General Emergency',
+    })
   }
 }

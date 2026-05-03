@@ -2,38 +2,57 @@
 
 import { useRouter } from 'next/navigation'
 
-interface BottomNavProps {
-  active: 'emergency' | 'dispatch' | 'history' | 'profile'
+interface Props {
+  active: 'emergency' | 'dispatch'
 }
 
-export default function BottomNav({ active }: BottomNavProps) {
+export default function BottomNav({ active }: Props) {
   const router = useRouter()
 
-  const navItems = [
-    { id: 'emergency', label: 'Emergency', icon: '🆘', path: '/dashboard' },
-    { id: 'dispatch', label: 'Dispatch', icon: '🚨', path: '/dispatch' },
-    { id: 'history', label: 'History', icon: '📋', path: '/history' },
-    { id: 'profile', label: 'Profile', icon: '👤', path: '/profile' },
+  const items = [
+    {
+      key: 'emergency',
+      label: 'Emergency',
+      path: '/dashboard',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" strokeWidth="1.8">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      ),
+    },
+    {
+      key: 'dispatch',
+      label: 'Dispatch',
+      path: '/dispatch',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" strokeWidth="1.8">
+          <line x1="22" y1="2" x2="11" y2="13" />
+          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+        </svg>
+      ),
+    },
   ]
 
   return (
-    <div className="flex items-center justify-around px-4 py-2 bg-[#0F1318] border-t border-[#1E2530] flex-shrink-0">
-      {navItems.map((item) => (
-        <button
-          key={item.id}
-          onClick={() => router.push(item.path)}
-          className={`flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-all ${
-            active === item.id
-              ? 'text-[#E63946]'
-              : 'text-[#6B7685] hover:text-[#EEF2F7]'
-          }`}
-        >
-          <span className="text-[20px]">{item.icon}</span>
-          <span className="text-[10px] font-semibold tracking-wider">
-            {item.label}
-          </span>
-        </button>
-      ))}
+    <div className="flex border-t border-[#1E2530] bg-[#080B0F]/97 backdrop-blur-2xl flex-shrink-0">
+      {items.map(item => {
+        const isOn = active === item.key
+        return (
+          <button
+            key={item.key}
+            onClick={() => router.push(item.path)}
+            className={`flex-1 flex flex-col items-center py-3 gap-1.5 border-t-2 transition-all cursor-pointer bg-transparent border-b-0 border-l-0 border-r-0 ${isOn ? 'border-[#E63946]' : 'border-transparent'}`}
+          >
+            <span style={{ stroke: isOn ? '#E63946' : '#6B7685', transition: 'stroke .2s' }}>
+              {item.icon}
+            </span>
+            <span className={`text-[10px] font-semibold tracking-widest uppercase transition-colors ${isOn ? 'text-[#E63946]' : 'text-[#6B7685]'}`}>
+              {item.label}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }
