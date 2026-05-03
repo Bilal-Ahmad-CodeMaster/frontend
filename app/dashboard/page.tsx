@@ -151,6 +151,17 @@ export default function DashboardPage() {
     <div className="flex flex-col h-screen bg-[#080B0F] font-['Sora'] text-[#EEF2F7] overflow-hidden">
       {/* Header */}
       <Navbar/>
+      {isSpeaking && (
+        <button
+          onClick={stopSpeaking}
+          className="animate-pulse flex items-center gap-2 bg-red-500/20 border border-red-500/50 px-3 py-1.5 rounded-lg active:scale-95"
+        >
+          <div className="w-2 h-2 bg-red-500 rounded-full" />
+          <span className="text-[10px] font-bold text-red-400 tracking-widest">
+            STOP VOICE
+          </span>
+        </button>
+      )}
 
       <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col gap-6 pb-24">
 
