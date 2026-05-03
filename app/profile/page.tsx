@@ -1,8 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, Phone, Droplet, Mail, CheckCircle2, ShieldAlert, Info, HeartPulse } from "lucide-react";
+import { User as UserIcon, Phone, Droplet, Mail, CheckCircle2, ShieldAlert, Info, HeartPulse } from "lucide-react";
 import Navbar from "../../components/NavBar";
+
+// Define the User interface to solve TypeScript errors
+interface MadadUser {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    emergencyContact?: string;
+    medicalInfo?: {
+        bloodGroup: string;
+    };
+}
 
 export default function ProfilePage() {
     const [formData, setFormData] = useState({
@@ -17,20 +29,28 @@ export default function ProfilePage() {
     const [message, setMessage] = useState({ type: "", text: "" });
 
     useEffect(() => {
-        const storedUser = JSON.parse(localStorage.getItem("madad_user"));
-        if (storedUser) {
-            setFormData({
-                firstName: storedUser.firstName || "",
-                lastName: storedUser.lastName || "",
-                email: storedUser.email || "",
-                phone: storedUser.phone || "",
-                bloodGroup: storedUser.medicalInfo?.bloodGroup || "",
-                emergencyContact: storedUser.emergencyContact || ""
-            });
+        // 1. Get the string from localStorage safely
+        const storedUserString = localStorage.getItem("madad_user");
+
+        // 2. Only parse if the string is not null
+        if (storedUserString) {
+            try {
+                const storedUser: MadadUser = JSON.parse(storedUserString);
+                setFormData({
+                    firstName: storedUser.firstName || "",
+                    lastName: storedUser.lastName || "",
+                    email: storedUser.email || "",
+                    phone: storedUser.phone || "",
+                    bloodGroup: storedUser.medicalInfo?.bloodGroup || "",
+                    emergencyContact: storedUser.emergencyContact || ""
+                });
+            } catch (error) {
+                console.error("Failed to parse user data", error);
+            }
         }
     }, []);
 
-    const handleUpdate = async (e) => {
+    const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setMessage({ type: "", text: "" });
@@ -83,7 +103,7 @@ export default function ProfilePage() {
                         <div className="bg-[#11161D] border border-[#1E2530] rounded-2xl overflow-hidden shadow-2xl">
                             <div className="px-6 py-4 border-b border-[#1E2530] bg-[#161C24]">
                                 <h2 className="text-sm font-bold uppercase tracking-widest text-gray-400 flex items-center gap-2">
-                                    <User size={16} className="text-[#E63946]" /> Identity
+                                    <UserIcon size={16} className="text-[#E63946]" /> Identity
                                 </h2>
                             </div>
 
@@ -147,7 +167,7 @@ export default function ProfilePage() {
                                         <select
                                             value={formData.bloodGroup}
                                             onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-                                            className="w-full bg-[#080B0F] border border-[#1E2530] p-3 rounded-xl focus:border-[#E63946] outline-none appearance-none"
+                                            className="w-full bg-[#080B0F] border border-[#1E2530] p-3 rounded-xl focus:border-[#E63946] outline-none appearance-none text-white"
                                         >
                                             <option value="Unknown">Select</option>
                                             <option value="A+">A+</option>
@@ -192,8 +212,8 @@ export default function ProfilePage() {
 
                             {message.text && (
                                 <div className={`flex items-center gap-2 px-6 py-3 rounded-full text-sm font-bold animate-in fade-in slide-in-from-bottom-4 shadow-lg ${message.type === "success"
-                                        ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                                        : "bg-red-500/10 text-[#E63946] border border-red-500/20"
+                                    ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                                    : "bg-red-500/10 text-[#E63946] border border-red-500/20"
                                     }`}>
                                     {message.type === "success" && <CheckCircle2 size={18} />}
                                     {message.text}
