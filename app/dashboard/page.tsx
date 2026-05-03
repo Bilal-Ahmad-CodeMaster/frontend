@@ -11,20 +11,13 @@ interface TriageResult {
   steps: string[]
 }
 
-function triageText(text: string): TriageResult {
-  const t = text.toLowerCase()
-  if (t.includes('heart') || t.includes('chest') || t.includes('attack')) {
-    return { severity: 'critical', type: 'Heart Attack', steps: ['Call 1122', 'Loosen clothing', 'Start CPR if needed'] }
-  }
-  return { severity: 'minor', type: 'General Emergency', steps: ['Stay calm', 'Check breathing', 'Call 1122'] }
-}
-
 function stripMarkdown(text: string): string {
   return text
     .replace(/\*\*(.*?)\*\*/g, '$1')
     .replace(/\*(.*?)\*/g, '$1')
     .replace(/#+\s/g, '')
     .replace(/`(.*?)`/g, '$1')
+    .replace(/[0-9]+\.\s/g, '')
     .trim()
 }
 
@@ -50,38 +43,25 @@ export default function DashboardPage() {
 
   const speakText = (text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return
-
     stopSpeaking()
 
-    const cleanText = text.replace(/।/g, '.').replace(/\n/g, ' ')
-    const u = new SpeechSynthesisUtterance(cleanText)
+    // Speech ko natural banane ke liye clean-up
+    const naturalText = text.replace(/\[|\]/g, '').replace(/:/g, '... ')
+    const u = new SpeechSynthesisUtterance(naturalText)
 
     const loadVoices = () => {
       const voices = window.speechSynthesis.getVoices()
+      const isUrdu = userLangRef.current === 'ur-PK'
 
-      if (userLangRef.current === 'ur-PK') {
-        const urduVoice =
-          voices.find(v => v.lang === 'ur-PK') ||
-          voices.find(v => v.lang.startsWith('ur')) ||
-          voices.find(v => v.lang.startsWith('ar'))
+      // Roman Urdu ke liye English voice natural lagti hai
+      const bestVoice = voices.find(v => v.lang === 'en-US' && v.name.includes('Google')) || voices[0]
 
-        if (urduVoice) u.voice = urduVoice
-        u.lang = 'ur-PK'
-        u.rate = 0.75
-      } else {
-        const enVoice =
-          voices.find(v => v.lang === 'en-US' && v.name.includes('Google')) ||
-          voices.find(v => v.lang === 'en-US')
-        if (enVoice) u.voice = enVoice
-        u.lang = 'en-US'
-        u.rate = 0.85
-      }
-
-      u.volume = 1
+      if (bestVoice) u.voice = bestVoice
+      u.lang = userLangRef.current
+      u.rate = 0.85; // Thoda slow taake instruction saaf samajh aaye
+      u.pitch = 1.0;
       u.onstart = () => setIsSpeaking(true)
       u.onend = () => setIsSpeaking(false)
-      u.onerror = () => setIsSpeaking(false)
-
       window.speechSynthesis.speak(u)
     }
 
@@ -92,14 +72,10 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.getVoices()
-    }
-  }, [])
-
   const callEmergencyAPI = async (text: string) => {
     setApiLoading(true)
+    setTriage(null)
+
     try {
       const res = await fetch('/api/emergency', {
         method: 'POST',
@@ -110,22 +86,17 @@ export default function DashboardPage() {
 
       if (res.ok) {
         const rawGuidance = data.guidance || ''
-        const cleanGuidance = stripMarkdown(rawGuidance)
-
-        const steps = cleanGuidance
+        const steps = rawGuidance
           .split('\n')
-          .filter((s: string) => s.trim())
+          .filter((s: string) => s.trim().length > 5)
           .map((s: string) => stripMarkdown(s))
 
-        setTriage({ severity: data.severity || 'minor', type: data.type || 'General', steps })
-
+        setTriage({ severity: data.severity, type: data.type, steps })
         userLangRef.current = data.language === 'ur' ? 'ur-PK' : 'en-US'
-        speakText(cleanGuidance)
+        speakText(stripMarkdown(rawGuidance))
       }
-    } catch {
-      const result = triageText(text)
-      setTriage(result)
-      speakText(result.steps.join('. '))
+    } catch (err) {
+      console.error("API Error", err)
     } finally {
       setApiLoading(false)
     }
@@ -138,28 +109,18 @@ export default function DashboardPage() {
     const r = new SR()
     r.continuous = false
     r.interimResults = true
-    r.lang = 'ur-PK,en-US'
-
-    r.onstart = () => { stopSpeaking() }
+    r.lang = 'en-US'
 
     r.onresult = (e: any) => {
-      let interim = '', final = ''
+      let final = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript
-        if (e.results[i].isFinal) {
-          final += t
-          stopSpeaking()
-        } else {
-          interim += t
-        }
+        if (e.results[i].isFinal) final += e.results[i][0].transcript
       }
-      setTranscript((final || interim).trim())
-      if (final.trim()) {
-        callEmergencyAPI(final.trim())
-        r.stop()
+      if (final) {
+        setTranscript(final)
+        callEmergencyAPI(final)
       }
     }
-
     r.onend = () => setListening(false)
     return r
   }
@@ -180,83 +141,109 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col h-screen bg-[#080B0F] font-['Sora'] text-[#EEF2F7] overflow-hidden">
-      <nav className="flex items-center justify-between px-6 py-3.5 border-b border-[#1E2530] bg-[#080B0F]/95 backdrop-blur-md">
+      {/* Header */}
+      <nav className="flex items-center justify-between px-6 py-4 border-b border-[#1E2530] bg-[#080B0F]/95 backdrop-blur-md z-10">
         <span className="text-xl font-extrabold tracking-tight">
           Ma<span className="text-[#E63946]">dad</span>
         </span>
         {isSpeaking && (
-          <button
-            onClick={stopSpeaking}
-            className="flex items-center gap-2 bg-red-500/20 border border-red-500/50 px-3 py-1.5 rounded-lg active:scale-95"
-          >
-            <div className="w-2 h-2 bg-red-500 rounded-sm" />
-            <span className="text-[10px] font-bold text-red-400">STOP VOICE</span>
+          <button onClick={stopSpeaking} className="animate-pulse flex items-center gap-2 bg-red-500/20 border border-red-500/50 px-3 py-1.5 rounded-lg active:scale-95">
+            <div className="w-2 h-2 bg-red-500 rounded-full" />
+            <span className="text-[10px] font-bold text-red-400 tracking-widest">STOP VOICE</span>
           </button>
         )}
       </nav>
 
-      <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col gap-6 pb-24">
 
-        {/* SEVERITY DISPLAY */}
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${triage ? SEV_STYLES[triage.severity!] : 'border-[#1E2530] bg-[#0F1318]'}`}>
-          <div className={`w-2.5 h-2.5 rounded-full ${triage ? SEV_DOT[triage.severity!] : 'bg-[#3D4855]'}`} />
-          <span className={`text-[12px] font-semibold ${triage ? SEV_TEXT[triage.severity!] : 'text-[#6B7685]'}`}>
-            {triage ? `${triage.severity?.toUpperCase()} — ${triage.type}` : 'System Standby'}
+        {/* Severity Status Agent */}
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-500 ${triage ? SEV_STYLES[triage.severity!] : 'border-[#1E2530] bg-[#0F1318]'}`}>
+          <div className={`w-2.5 h-2.5 rounded-full ${triage ? SEV_DOT[triage.severity!] + ' animate-pulse' : 'bg-[#3D4855]'}`} />
+          <span className={`text-[12px] font-bold uppercase tracking-wider ${triage ? SEV_TEXT[triage.severity!] : 'text-[#6B7685]'}`}>
+            {triage ? `${triage.severity} — ${triage.type}` : 'System Standby...'}
           </span>
         </div>
 
-        {/* MIC BUTTON */}
+        {/* Interaction Agent */}
         <div className="flex flex-col items-center gap-6 py-4">
           <button
             onClick={toggleMic}
-            className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
-              listening
-                ? 'bg-red-600 scale-110 shadow-[0_0_50px_rgba(230,57,70,0.8)]'
-                : 'bg-red-500'
-            }`}
+            className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-500 ${listening
+              ? 'bg-red-600 scale-105 shadow-[0_0_80px_rgba(230,57,70,0.4)]'
+              : 'bg-red-500 hover:bg-red-600 shadow-2xl'
+              }`}
           >
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-              <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
-              <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
-              <line x1="12" y1="18" x2="12" y2="22"/>
-              <line x1="8" y1="22" x2="16" y2="22"/>
-            </svg>
+            {listening ? (
+              <div className="flex gap-1 items-center">
+                <span className="w-1.5 h-8 bg-white rounded-full animate-quiet" />
+                <span className="w-1.5 h-12 bg-white rounded-full animate-loud" />
+                <span className="w-1.5 h-8 bg-white rounded-full animate-quiet" />
+              </div>
+            ) : (
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
+                <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                <line x1="12" y1="18" x2="12" y2="22" />
+              </svg>
+            )}
           </button>
 
-          {/* Loading indicator */}
-          {apiLoading && (
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </div>
-          )}
-
-          <p className="text-[13px] font-medium text-[#6B7685]">
-            {listening ? 'Listening...' : isSpeaking ? 'Tap Mic to Interrupt' : apiLoading ? 'Processing...' : 'Tap to start'}
-          </p>
+          <div className="text-center">
+            <h2 className="text-lg font-bold tracking-tight">
+              {listening ? 'Listening...' : apiLoading ? 'Analyzing...' : 'Emergency? Speak Now'}
+            </h2>
+            <p className="text-sm text-[#6B7685] mt-1 font-medium">
+              {isSpeaking ? 'Listening to Madad AI...' : 'Urdu ya English mein batayein'}
+            </p>
+          </div>
         </div>
 
-        {/* TRANSCRIPT */}
-        <div className="px-4 py-3 bg-[#0F1318] border border-[#1E2530] rounded-2xl text-[13px] min-h-[50px] italic text-[#6B7685]">
-          {transcript || 'Voice transcript will appear here...'}
-        </div>
-
-        {/* AI GUIDANCE STEPS */}
-        {triage && (
-          <div className="bg-[#0F1318] border border-[#1E2530] rounded-2xl p-4">
-            <p className="text-[11px] font-bold text-[#E63946] uppercase mb-3">Emergency Steps</p>
-            {triage.steps.map((s, i) => (
-              <div key={i} className="flex gap-3 mb-2">
-                <span className="text-red-500 font-bold text-[13px] shrink-0">{i + 1}.</span>
-                <p className="text-[13px] text-[#EEF2F7] leading-relaxed">{s}</p>
-              </div>
-            ))}
+        {/* Transcript Box */}
+        {transcript && (
+          <div className="px-5 py-4 bg-[#0F1318] border border-[#1E2530] rounded-2xl animate-in fade-in zoom-in-95">
+            <p className="text-[10px] text-[#E63946] font-black uppercase tracking-widest mb-1">Live Transcript</p>
+            <p className="text-[14px] italic text-[#EEF2F7] leading-relaxed">"{transcript}"</p>
           </div>
         )}
 
+        {/* Detailed First Aid Agent (Instruction Cards) */}
+        {triage && (
+          <div className="flex flex-col gap-4 animate-in slide-in-from-bottom-6 duration-700">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-[11px] font-black text-[#6B7685] uppercase tracking-widest">Medical Instructions</p>
+              <span className="text-[10px] bg-red-500/10 text-red-500 px-2 py-0.5 rounded-full font-bold">LIVE GUIDE</span>
+            </div>
+
+            {triage.steps.map((step, idx) => {
+              const [title, desc] = step.includes(':') ? step.split(':') : [null, step];
+              return (
+                <div key={idx} className="bg-[#11161D] border border-[#1E2530] p-5 rounded-2xl shadow-xl shadow-black/40">
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-xl bg-red-600/20 text-red-500 flex items-center justify-center font-black text-sm shrink-0 border border-red-500/20">
+                      {idx + 1}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {title && <h3 className="text-red-400 font-bold text-[15px] uppercase tracking-tight">{title.trim()}</h3>}
+                      <p className="text-[14px] leading-relaxed text-[#EEF2F7] font-medium opacity-90">
+                        {desc?.trim() || step}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
+
       <BottomNav active="emergency" />
+
+      <style jsx>{`
+        @keyframes quiet { 0%, 100% { height: 20px; } 50% { height: 40px; } }
+        @keyframes loud { 0%, 100% { height: 30px; } 50% { height: 60px; } }
+        .animate-quiet { animation: quiet 0.8s ease-in-out infinite; }
+        .animate-loud { animation: loud 0.8s ease-in-out infinite; }
+      `}</style>
     </div>
   )
 }
