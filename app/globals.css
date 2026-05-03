@@ -55,3 +55,8 @@ body {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+*::-webkit-scrollbar {
+  display: none !important; /* Forces it to show */
+  width: 10px !important;    /* Gives it thickness */
+  height: 10px !important;
+}
