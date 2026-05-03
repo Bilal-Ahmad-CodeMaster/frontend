@@ -1,7 +1,7 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 
-// 1. Next.js 14 requires viewport/theme settings to be exported separately
 export const viewport: Viewport = {
   themeColor: '#ef4444',
   width: 'device-width',
@@ -11,7 +11,6 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-// 2. Standard Metadata
 export const metadata: Metadata = {
   title: 'Madad | AI Emergency Response',
   description: 'Voice-first AI first-aid and dispatch system.',
@@ -21,8 +20,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      {/* 3. suppressHydrationWarning stops browser extensions from crashing the app */}
       <body className="bg-slate-900 text-white min-h-screen" suppressHydrationWarning>
+        <ServiceWorkerRegistration />
         {children}
       </body>
     </html>
