@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 interface RegisterForm {
@@ -28,27 +29,27 @@ type Errors = Record<string, string>
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const isEmail  = (v: string) => v.includes('@') && v.includes('.')
+const isEmail = (v: string) => v.includes('@') && v.includes('.')
 const isPKPhone = (v: string) => /^3\d{9}$/.test(v.trim())
 
 function validateRegister(f: RegisterForm): Errors {
   const e: Errors = {}
-  if (!f.firstName.trim())              e.firstName       = 'First name is required'
-  if (!f.lastName.trim())               e.lastName        = 'Last name is required'
-  if (!isEmail(f.email))                e.email           = 'Enter a valid email'
-  if (!isPKPhone(f.phone))              e.phone           = 'Enter 10 digits starting with 3'
-  if (!f.ecName.trim())                 e.ecName          = 'Emergency contact name required'
-  if (!f.ecPhone.trim())                e.ecPhone         = 'Emergency contact phone required'
-  if (f.password.length < 8)           e.password        = 'Minimum 8 characters'
+  if (!f.firstName.trim()) e.firstName = 'First name is required'
+  if (!f.lastName.trim()) e.lastName = 'Last name is required'
+  if (!isEmail(f.email)) e.email = 'Enter a valid email'
+  if (!isPKPhone(f.phone)) e.phone = 'Enter 10 digits starting with 3'
+  if (!f.ecName.trim()) e.ecName = 'Emergency contact name required'
+  if (!f.ecPhone.trim()) e.ecPhone = 'Emergency contact phone required'
+  if (f.password.length < 8) e.password = 'Minimum 8 characters'
   if (f.password !== f.confirmPassword) e.confirmPassword = 'Passwords do not match'
   return e
 }
 
 function getStrength(pw: string) {
   let s = 0
-  if (pw.length >= 8)          s++
-  if (/[A-Z]/.test(pw))        s++
-  if (/[0-9]/.test(pw))        s++
+  if (pw.length >= 8) s++
+  if (/[A-Z]/.test(pw)) s++
+  if (/[0-9]/.test(pw)) s++
   if (/[^A-Za-z0-9]/.test(pw)) s++
   return {
     score: s,
@@ -105,17 +106,17 @@ function SecLabel({ text }: { text: string }) {
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function LoginPage() {
   const router = useRouter()
-  const [tab, setTab]         = useState<'login' | 'register'>('login')
+  const [tab, setTab] = useState<'login' | 'register'>('login')
   const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [showPw, setShowPw]   = useState(false)
+  const [showPw, setShowPw] = useState(false)
   const [showCpw, setShowCpw] = useState(false)
 
-  const [log, setLog]       = useState<LoginForm>({ email: '', password: '' })
+  const [log, setLog] = useState<LoginForm>({ email: '', password: '' })
   const [logErr, setLogErr] = useState<Errors>({})
 
-  const [reg, setReg]       = useState<RegisterForm>({
+  const [reg, setReg] = useState<RegisterForm>({
     firstName: '', lastName: '', email: '', phone: '',
     bloodGroup: '', ecName: '', ecPhone: '',
     password: '', confirmPassword: '', agreed: false,
@@ -144,13 +145,13 @@ export default function LoginPage() {
     setError(''); setSuccess('')
 
     const errs: Errors = {}
-    if (!isEmail(log.email))   errs.email    = 'Enter a valid email'
-    if (!log.password.trim())  errs.password = 'Password is required'
+    if (!isEmail(log.email)) errs.email = 'Enter a valid email'
+    if (!log.password.trim()) errs.password = 'Password is required'
     if (Object.keys(errs).length) { setLogErr(errs); return }
 
     setLoading(true)
     try {
-      const res  = await fetch('/api/auth/login', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: log.email, password: log.password }),
@@ -158,7 +159,7 @@ export default function LoginPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Login failed')
 
-      localStorage.setItem('madad_user',    JSON.stringify(data.user))
+      localStorage.setItem('madad_user', JSON.stringify(data.user))
       localStorage.setItem('madad_user_id', data.user._id?.toString() || '')
 
       setSuccess('Welcome back! Redirecting…')
@@ -191,17 +192,17 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      const res  = await fetch('/api/auth/register', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          firstName:        reg.firstName,
-          lastName:         reg.lastName,
-          email:            reg.email,
-          phone:            '+92' + reg.phone,
-          bloodGroup:       reg.bloodGroup,
+          firstName: reg.firstName,
+          lastName: reg.lastName,
+          email: reg.email,
+          phone: '+92' + reg.phone,
+          bloodGroup: reg.bloodGroup,
           emergencyContact: { name: reg.ecName, phone: reg.ecPhone },
-          password:         reg.password,
+          password: reg.password,
         }),
       })
       const data = await res.json()
@@ -210,7 +211,7 @@ export default function LoginPage() {
       setSuccess('Account created! Switching to login…')
       setTimeout(() => {
         switchTab('login')
-        setReg({ firstName:'',lastName:'',email:'',phone:'',bloodGroup:'',ecName:'',ecPhone:'',password:'',confirmPassword:'',agreed:false })
+        setReg({ firstName: '', lastName: '', email: '', phone: '', bloodGroup: '', ecName: '', ecPhone: '', password: '', confirmPassword: '', agreed: false })
         setSuccess('')
       }, 2000)
     } catch (err: unknown) {
@@ -249,9 +250,9 @@ export default function LoginPage() {
           </div>
 
           {/* ── ICON SLOT — replace with your logo ── */}
-          <div className="w-[68px] h-[68px] rounded-2xl border-2 border-dashed border-red-500/50 bg-red-500/6 flex items-center justify-center mb-5 z-10">
-            {/* TODO: <Image src="/logo.png" width={40} height={40} alt="Madad" /> */}
-            <span className="text-[9px] font-bold text-red-500/70 text-center leading-tight tracking-widest">YOUR<br/>ICON</span>
+          <div className="w-[68px] h-[68px] rounded-2xl border-2 border-dashed border-red-500/50 bg-red-500/6 flex items-center justify-center m-5 z-10">
+            <Image src="/logo.png" width={40} height={40} alt="Madad" />
+
           </div>
 
           <h1 className="text-[42px] font-extrabold tracking-tight leading-none z-10">

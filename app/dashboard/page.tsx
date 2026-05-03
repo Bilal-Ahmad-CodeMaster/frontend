@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import BottomNav from '@/components/BottomNav'
+import Link from 'next/link'
+import Navbar from '@/components/NavBar'
 
 type Severity = 'critical' | 'urgent' | 'minor' | null
 
@@ -33,7 +35,13 @@ export default function DashboardPage() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const recognitionRef = useRef<any>(null)
   const userLangRef = useRef<'ur-PK' | 'en-US'>('en-US')
+  const [isLoggedIn, setIsLoggedIn] = useState(true); // Default to true to prevent flicker
 
+  useEffect(() => {
+    // Check for token after the component mounts on the client
+    const token = localStorage.getItem("token");
+    setIsLoggedIn(!!token);
+  }, []);
   const stopSpeaking = () => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel()
@@ -142,17 +150,7 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col h-screen bg-[#080B0F] font-['Sora'] text-[#EEF2F7] overflow-hidden">
       {/* Header */}
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-[#1E2530] bg-[#080B0F]/95 backdrop-blur-md z-10">
-        <span className="text-xl font-extrabold tracking-tight">
-          Ma<span className="text-[#E63946]">dad</span>
-        </span>
-        {isSpeaking && (
-          <button onClick={stopSpeaking} className="animate-pulse flex items-center gap-2 bg-red-500/20 border border-red-500/50 px-3 py-1.5 rounded-lg active:scale-95">
-            <div className="w-2 h-2 bg-red-500 rounded-full" />
-            <span className="text-[10px] font-bold text-red-400 tracking-widest">STOP VOICE</span>
-          </button>
-        )}
-      </nav>
+      <Navbar/>
 
       <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col gap-6 pb-24">
 
