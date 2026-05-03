@@ -1,7 +1,11 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  /* 
+     This tells Next.js to treat edge-tts as a standard Node.js module 
+     rather than trying to bundle its raw TypeScript files. 
+  */
+  serverExternalPackages: ['edge-tts'],
 };
 
 export default nextConfig;
