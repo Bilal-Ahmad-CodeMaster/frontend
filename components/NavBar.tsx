@@ -4,14 +4,27 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+// Define the interface to fix the 'never' type error
+interface MadadUser {
+    firstName: string;
+    lastName: string;
+    email: string;
+}
+
 export default function Navbar() {
-    const [user, setUser] = useState(null);
+    // Tell useState that user can be a MadadUser object or null
+    const [user, setUser] = useState<MadadUser | null>(null);
     const router = useRouter();
 
     useEffect(() => {
-        const storedUser = localStorage.getItem("madad_user");
-        if (storedUser) {
-            setUser(JSON.parse(storedUser));
+        const storedUserString = localStorage.getItem("madad_user");
+        if (storedUserString) {
+            try {
+                const parsedUser: MadadUser = JSON.parse(storedUserString);
+                setUser(parsedUser);
+            } catch (error) {
+                console.error("Failed to parse user session", error);
+            }
         }
     }, []);
 
@@ -32,10 +45,11 @@ export default function Navbar() {
                     <div className="flex items-center gap-4">
                         <Link href="/profile" className="flex items-center gap-2 group">
                             <div className="w-8 h-8 rounded-full bg-[#E63946] flex items-center justify-center text-white font-bold text-xs uppercase">
-                                {user?.firstName[0]}{user.lastName[0]}
+                                {/* Using optional chaining safely */}
+                                {user.firstName?.[0] || ""}{user.lastName?.[0] || ""}
                             </div>
                             <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
-                                {user?.firstName}
+                                {user.firstName}
                             </span>
                         </Link>
                         <button
